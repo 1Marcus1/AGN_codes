@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 from scipy import interpolate
 import scipy.optimize as optimization
@@ -198,6 +199,28 @@ y_res = Y1 + Y2
 y_1 = f.SED_synchrotron(x_ssc, nu, type_powerlaw)
 y_2 = f.SED_ssc(x_ssc, nu, type_powerlaw)
 y_old = y_1 + y_2
+
+
+# cooling time - equations 4.11 and 5.37 in ghisellini
+g_syn = gamma_max
+beta  = np.sqrt( 1 - ( 1 / (g_syn**2) ) )
+t_syn = 6 * np.pi * me * c / ( sigma_T * (B**2) * (beta**2) * g_syn )      #equation 4.11
+
+lum = np.trapz(Y1, nu, axis=0) * 4 * np.pi * distance**2
+t_ic  = 3 * np.pi * (distance**2) * me * (c**2) / ( sigma_T * lum * g_syn )    #equation 5.37
+
+print('cooling time for synchrotron: {:e}'.format(t_syn))
+print('cooling time for SSC: {:e}'.format(t_ic))
+
+
+
+# Synchrotron self absorption - equation 4.56 in ghisellini
+nu_L = e * B / (2.0 * np.pi * me * c)        #equation 4.41
+f_alfa = np.power(3,(p[0]+1)/2)*math.gamma((3*p[0]+22)/12)*math.gamma((3*p[0]+2)/12)*math.gamma((p[0]+6)/4)/math.gamma((p[0]+8)/4) #equation 4.52
+nu_t = nu_L * np.power( np.sqrt(np.pi)*(e**2)*ke*raio*f_alfa/(8*me*c*nu_L) , 4/(p[0]+4) )    #equation 4.56
+
+print('SSA frequency: {:e}'.format(nu_t))
+
 
 
 
