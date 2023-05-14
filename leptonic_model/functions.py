@@ -1,12 +1,15 @@
 import numpy as np
+import math
 import matplotlib.pyplot as plt
+import astropy.units as units
+
 
 gamma_min = 8.0e2 #lorentz factor
-gamma_max = 1.0e8 #lorentz factor
-gamma_br  = np.array([5.0e4, 3.9e5])
-gamma_cut = np.array([1.0e5])
+gamma_max = 1.0e6 #lorentz factor
+gamma_br  = [5.0e4, 3.9e5]
+gamma_cut = [1.0e5]
 
-p = np.array([2.2,2.7,4.7]) #pot - power law
+p = [2.3,2.7,4.7] #pot - power law
 
 #Power laws
 powerlaw_S = "Simple"
@@ -17,7 +20,7 @@ powerlaw_2B = "2breaks"
 
 ke = 5.0e2 #normalization factor
 
-raio = 5.2e16 #cm - radius of emitting region
+raio = 5.2e16#5.2e16 #cm - radius of emitting region
 GAMMA = 20.0 #Lorentz factor
 
 deltaD = 21.0 #doppler boosting
@@ -29,7 +32,7 @@ CD = 1.0 #compton dominance
 #Redshift
 z =  0.031
 
-distance = 3.2e26 #cm - Luminosity distance (distance to center of emitting region)
+distance = 3.2e26#3.2e26 #cm - Luminosity distance (distance to center of emitting region)
 
 me = 9.1094e-28 #g - electron mass
 c = 2.99792458e10 #cm/s - speed of light
@@ -41,6 +44,8 @@ sigma_T = 6.652459e-25 #cm^2 - Thomson cross-section
 #frequency distribution
 nu = np.logspace(8,28, 200) #Hz - frequency for Synchrotron
 nu2 = np.logspace(5,28, 200) #Hz - frequency to integrate
+
+
 
 def R(x):
     #Eq. 7.45 in Reference, using approximation Eq. D7 of https://arxiv.org/abs/1006.1045
@@ -75,10 +80,9 @@ def axes_reshaper(*args):
     return reshaped_arrays
 
 ################################################ Flux SED for Synchrotron ################################################
+x_synch = [gamma_min, gamma_max, gamma_br, gamma_cut, ke, p, me, c, hp, e, raio, GAMMA, deltaD, distance, B, z]
 
-x_synch = np.array([gamma_min, gamma_max, gamma_br, gamma_cut, ke, p, me, c, hp, e, raio, GAMMA, deltaD, distance, B, z])
-
-def SED_synchrotron(x_synch, nu, powerlaw):
+def SED_synchrotron(x_synch, nu, powerlaw, ssa=False):
     gamma_min = x_synch[0]
     gamma_max = x_synch[1]
     gamma_br = x_synch[2]
@@ -118,7 +122,7 @@ def SED_synchrotron(x_synch, nu, powerlaw):
     gammadist1 = axes_reshaper(gammadist)
     epsilon1 = axes_reshaper(epsilon)
 
-   
+    #Ne = []
     #electrons density
     if (powerlaw=="Simple"):
         ne = (np.power(gammadist1, -p[0]))*ke #electron/cm^3
@@ -132,10 +136,10 @@ def SED_synchrotron(x_synch, nu, powerlaw):
     elif (powerlaw=="Exponential-Cutoff"):
         ne = (np.power(gammadist1, -p[0]))*ke*np.exp(-np.power(gamma_cut,p[1]))
     elif (powerlaw=="2breaks"):
-        ne = np.where(gammadist1 < gamma_br[0],
+        ne = ( np.where(gammadist1 < gamma_br[0],
                        np.power(gammadist1, -p[0])*ke,
                     np.where(gammadist1 > gamma_br[1], ke*np.power(gamma_br[0], p[1]-p[0])*np.power(gamma_br[1], p[2]-p[1])*np.power(gammadist1, -p[2]),
-                                ke*np.power(gamma_br[0], p[1]-p[0])*np.power(gammadist1, -p[1]) ))
+                                ke*np.power(gamma_br[0], p[1]-p[0])*np.power(gammadist1, -p[1]) )) )
     
     #electrons quantity    
     Ne = Ve*ne
@@ -149,7 +153,9 @@ def SED_synchrotron(x_synch, nu, powerlaw):
     gx = R(x)
 
     #emissivity
-    integrand = (Ne * np.sqrt(3) * (e**3) * B / hp) * gx
+    #integrand = [0]*len(nu)
+
+    integrand = ( (Ne * np.sqrt(3) * (e**3) * B / hp) * gx )
     j = np.zeros((len(integrand)))
     for i in range(0,len(integrand)):
         j[i] = np.trapz(integrand[i], gammadist,axis=0)
@@ -158,14 +164,32 @@ def SED_synchrotron(x_synch, nu, powerlaw):
    
     #Flux for Synchrotron radiation - Eq. 7.116 in Reference, Eq. 21 in https://arxiv.org/abs/0802.1529
     SED = prefactor*epsilon*j
+    
+    if ssa == True:
+        #tau ssa
+        ssa_integrand = ke*(-(p[0]+2))*np.power(gammadist1,-p[0]-1)
+        integrand_2 = ssa_integrand * integrand
+        integral = [0]*len(integrand_2)#np.zeros(len(integrand_2))
+        for i in range(0,len(integrand_2)):
+            integral[i] = np.trapz(integrand_2[i],gammadist,axis=0)
+        lambda_c = hp/(me*c)
+        prefactor_k_epsilon = ( -1 / (8 * np.pi * me * np.power(epsilon, 2)) * np.power(lambda_c / c, 3) )
+        k_epsilon = (prefactor_k_epsilon * integral) / (Ve)
+        tau = 2 * k_epsilon * raio
+    
+        u = 1 / 2 + np.exp(-tau) / tau - (1 - np.exp(-tau)) / np.power(tau, 2)
+        u1 = np.where(tau < 1e-3, 1, 3 * u / tau)
+    
+        SED *= u1
+    
 
     return SED
 ##################################################################################################################
 
-x_ssc = np.array([gamma_min, gamma_max, gamma_br, gamma_cut, ke, p, me, c, hp, e, raio, GAMMA, deltaD, distance, B, z, nu2])
-
 ############################################# Flux SED for SSC ###################################################
-def SED_ssc(x_ssc, nu, powerlaw):
+x_ssc = [gamma_min, gamma_max, gamma_br, gamma_cut, ke, p, me, c, hp, e, raio, GAMMA, deltaD, distance, B, z, nu2]
+
+def SED_ssc(x_ssc, nu, powerlaw, ssa=False):
     gamma_min = x_ssc[0]
     gamma_max = x_ssc[1]
     gamma_br = x_ssc[2]
@@ -184,13 +208,14 @@ def SED_ssc(x_ssc, nu, powerlaw):
     z = x_ssc[15]
     nu2 = x_ssc[16]
     
+    synch_ssc = SED_synchrotron(x_ssc, nu2, powerlaw, ssa)
+    
     
     #volume of sphere
     Ve = (4/3) * np.pi * (raio**3)
 
     #SSC part
     integrate_nu = nu2
-    synch_ssc = SED_synchrotron(x_ssc, nu2, powerlaw)
    
     #adimensional frequencies
     nu1_ssc = nu*hp/(me*(c**2))
@@ -257,3 +282,58 @@ def SED_ssc(x_ssc, nu, powerlaw):
 
     return sed
 ####################################################################################################################
+
+
+powerlaw = 'Simple'
+
+synch = SED_synchrotron(x_synch, nu, powerlaw, ssa=False)
+ssc = SED_ssc(x_ssc, nu, powerlaw, ssa=False)
+sed = synch + ssc
+
+ssa1 = SED_synchrotron(x_synch, nu, powerlaw, ssa=True)
+ssa2 = SED_ssc(x_ssc, nu, powerlaw, ssa=True)
+ssa = ssa1 + ssa2
+
+
+
+# cooling time - equations 4.11 and 5.37 in ghisellini
+g_syn = gamma_max
+beta  = np.sqrt( 1 - ( 1 / (g_syn**2) ) )
+t_syn = 6 * np.pi * me * c / ( sigma_T * (B**2) * (beta**2) * g_syn )      #equation 4.11
+
+lum   = np.trapz(ssa, nu, axis=0) * 4 * np.pi * distance**2
+t_ic  = 3 * np.pi * (distance**2) * me * (c**2) / ( sigma_T * lum * g_syn )    #equation 5.37
+
+print('cooling time for synchrotron: {:e}'.format(t_syn))
+print('cooling time for SSC: {:e}'.format(t_ic))
+
+
+
+file = np.loadtxt("mrk421.csv",delimiter=";")
+xdata = file[:,0]*2.417989e14
+ydata = file[:,1]
+error_data = file[:,2]
+
+
+
+
+fig, ax = plt.subplots()
+
+plt.plot(nu, sed,'-',label='ssc',linewidth=2,color='black')
+#plt.plot(nu, ssc,'-',linewidth=2,color='black')
+plt.plot(nu, ssa,'--',label='ssc with ssa',linewidth=2,color='blue')
+#plt.plot(nu, ssa2,'--',linewidth=2,color='blue')
+plt.plot(xdata, ydata,'o',label='Exp. MrK 421',mec='black',mfc='none')
+plt.errorbar(xdata, ydata, error_data, fmt='none')
+
+plt.legend(loc='best',numpoints=1)
+plt.grid(linestyle = '--',linewidth = 0.5)
+plt.xlabel(r'$\nu ~(Hz)$')
+plt.ylabel(r'$\nu F_{\nu} ~(erg ~cm^{-2} s^{-1})$')
+#plt.ylim([1e-13,1e-9])
+ax.set_yscale('log')
+ax.set_xscale('log')
+
+#plt.savefig('SED_Mrk421_fit_without_old_sed.png')
+plt.show()
+plt.close()
