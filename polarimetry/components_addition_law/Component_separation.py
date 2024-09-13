@@ -9,7 +9,7 @@ from scipy.optimize import minimize
 from scipy import stats
 
 from HagenTorn import HagenTorn as HT
-import Addition_Law as add
+from Addition_Law import Addition_Law as add
 
 
 home = os.getcwd()
