@@ -1,7 +1,7 @@
 import numpy as np
 import os
 
-class Addition_law:
+class Additionlaw:
     def __init__(self, cons, var, is_SP=False, norm=False):
         
         self.cons = cons
