@@ -8,8 +8,8 @@ import scipy.optimize as optimization
 from scipy.optimize import minimize
 from scipy import stats
 
-from HagenTorn import HagenTorn as HT
-from Addition_Law import Addition_Law as add
+from Hagen_Torn import HagenTorn as HT
+from Addition_Law import AdditionLaw as add
 
 
 home = os.getcwd()
